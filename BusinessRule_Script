@@ -1,0 +1,32 @@
+(function executeRule(current, previous /*null when async*/) {
+    var pdUserId = current.getValue('x_pd_integration_pagerduty_id');
+    if (!pdUserId) return;
+
+    try {
+        // 1. Prepare REST Message to PagerDuty API
+        var request = new sn_ws.RESTMessageV2();
+        request.setEndpoint('https://api.pagerduty.com/users/' + pdUserId);
+        request.setHttpMethod('DELETE'); // Reclaims the license in PagerDuty
+        request.setRequestHeader('Accept', 'application/vnd.pagerduty+json;version=2');
+        
+        // Fetch the REST API Key stored in your ServiceNow PagerDuty integration settings
+        var pdApiKey = gs.getProperty('x_pd_integration.api_key'); 
+        request.setRequestHeader('Authorization', 'Token token=' + pdApiKey);
+        
+        // 2. Execute the call
+        var response = request.execute();
+        var httpStatus = response.getStatusCode();
+        
+        if (httpStatus === 204) {
+            gs.info('PagerDuty Sync: Successfully deprovisioned PagerDuty user ' + current.email + ' (ID: ' + pdUserId + ')');
+            
+            // 3. Clear the PagerDuty ID from ServiceNow so they are no longer linked
+            current.setValue('x_pd_integration_pagerduty_id', '');
+            current.update();
+        } else {
+            gs.error('PagerDuty Sync: Failed to deprovision user. HTTP Status: ' + httpStatus + ', Response: ' + response.getBody());
+        }
+    } catch (ex) {
+        gs.error('PagerDuty Sync: Error during deprovisioning: ' + ex.getMessage());
+    }
+})(current, previous);
